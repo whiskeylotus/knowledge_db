@@ -2,13 +2,14 @@
 
 ## Tools
 
-[GrayHatWarfare](buckets.grayhatwarfare.com/buckets)
-[Cloud_enum](https://github.com/initstring/cloud_enum)
-[BucketFinder](https://digi.ninja/projects/bucket_finder.php)
-[TruffleHog](https://github.com/trufflesecurity/truffleHog)
-[AWS_Scripts](https://github.com/cloudbreach/CloudBreach_AWSScripts)
-[Pacu - AWS exploitation framework](https://github.com/RhinoSecurityLabs/pacu)
-[dsnap - download EBS snapshots](https://github.com/RhinoSecurityLabs/dsnap)
+- [GrayHatWarfare](buckets.grayhatwarfare.com/buckets)
+- [Cloud_enum](https://github.com/initstring/cloud_enum)
+- [BucketFinder](https://digi.ninja/projects/bucket_finder.php)
+- [TruffleHog](https://github.com/trufflesecurity/truffleHog)
+- [AWS_Scripts](https://github.com/cloudbreach/CloudBreach_AWSScripts)
+- [Pacu - AWS exploitation framework](https://github.com/RhinoSecurityLabs/pacu)
+- [dsnap - download EBS snapshots](https://github.com/RhinoSecurityLabs/dsnap)
+- [AWS sso device code authentication](https://github.com/christophetd/aws-sso-device-code-authentication)
 
 
 ## AWS
@@ -21,6 +22,12 @@
 - SSM - AWS Systems Manager
 - IAM - Identity and Access Management
 - SNS - Amazon Simple Notification Service 
+- Lambda - serverless computing service
+- DynamoDB - NoSQL database
+- ECR - Elastic Container Registry
+- ECS - Elastic Container Service
+- EKS - Elastic Kubernetes Service
+- KMS - Key Management Service
 
 ### Tips
 
@@ -274,3 +281,177 @@ To loop over a long list of EC2 instance to find an attribute :
 for i in $(aws ec2 describe-instances --query 'Reservations[].Instances[].InstanceId' --output text); do echo $i && aws ec2 describe-instance-attribute --instance-id $i --attribute <attribute-name> ;done
 ```
 
+### Capture Credentials from SNS Service
+
+**Amazon Simple Notification Service (AWS SNS)**
+
+Amazon Simple Notification Service (AWS SNS) is a fully managed messaging service offered by Amazon Web Services (AWS). It enables the distribution of messages and notifications across a variety of platforms and endpoints, including email, SMS, HTTP/HTTPS, and more. AWS SNS uses a publish-subscribe model, where publishers send messages to topics, and subscribers receive those messages based on their interest in specific topics.
+
+A Topic ARN (Amazon Resource Name) is a unique identifier for an SNS topic within AWS. It’s used to address and target specific topics when publishing messages. Topic ARNs are essential for routing messages to the appropriate subscribers and play a key role in the access control policies that define who can publish and subscribe to specific topics.
+
+However, if an attacker gains unauthorised access to a topic ARN and possesses the necessary permissions, they could potentially abuse it in several ways:
+
+Unauthorised Message Publication: An attacker could publish unauthorised messages to a topic, potentially disseminating false information, spam, or malicious content to subscribers.
+
+Denial of Service: By flooding a topic with a high volume of messages, an attacker could overload the system and disrupt legitimate notifications, causing a denial of service (DoS) situation.
+
+Data Exfiltration: If an attacker has publishing access to a sensitive topic, they could use it to exfiltrate confidential data to an external location.
+
+To prevent such abuse, it’s crucial to implement strict access controls, use AWS Identity and Access Management (IAM) policies, and regularly audit and monitor your SNS topics to detect and mitigate any unauthorised activity.
+
+```
+aws --profile alex sns subscribe --topic-arn <topic-arn> --protocol email --notification-endpoint <email> # Subscribe to a topic
+# Subscription needs to be validated by checking your mail
+```
+
+### Get Remote Code Execution on a Lambda Function
+
+**AWS Lambda**
+
+AWS Lambda is a serverless computing service provided by Amazon Web Services (AWS). It enables users to run code in response to events or triggers without the need to manage servers. Lambda functions are designed to be small, single-purpose pieces of code that can scale automatically and execute in milliseconds.
+
+However, in some scenarios, a potential attacker could abuse Lambda functions if they gain unauthorised access. 
+
+Resource Exhaustion: Attackers might attempt to exhaust Lambda resources by triggering a high volume of requests or running long-duration functions, causing disruptions or resource exhaustion for other legitimate users.
+
+Unauthorised Code Execution: If an attacker gains access to create or modify Lambda functions, they could execute arbitrary code, potentially leading to data breaches or malicious actions within the AWS environment.
+
+Data Exfiltration: Attackers could abuse Lambda to exfiltrate sensitive data from an organisation by running functions that send data to external locations.
+
+DoS Attacks: Lambda functions can be targets of Distributed Denial of Service (DDoS) attacks, with attackers attempting to overwhelm the service by invoking a large number of functions simultaneously.
+
+To mitigate these risks, AWS users should implement strong access controls, use AWS Identity and Access Management (IAM) policies to restrict permissions, monitor Lambda function invocations, and employ best practices for securing their code and event sources. It’s crucial to follow AWS security guidelines to prevent potential abuse of Lambda functions.
+
+```
+aws lambda list-functions # list functions
+aws lambda get-function --function-name <function-name> # get function
+# Find URL of lambda function
+aws lambda get-policy --function-name <function-name> # get information about lambda's function policy (URL)
+aws apigateway get-rest-apis # Can also be used to gather information to build URL
+```
+
+Lambda URL format : `https://[NAME].execute-api.[REGION].amazonaws.com`
+
+Look in the lambda ARN and replace NAME and REGION !
+
+Once RCE in lambda, check `env` to retrieve AWS keys
+
+### Enumerate and Read Data from DynamoDB
+
+**Amazon DynamoDB**
+
+Amazon DynamoDB is a fully managed NoSQL database service offered by Amazon Web Services (AWS). It is designed for high-performance, low-latency, and scalable storage of structured data. DynamoDB provides features like automatic scaling, fault tolerance, and seamless replication across multiple AWS regions.
+
+However, if security measures are not properly implemented, attackers can potentially abuse DynamoDB in various ways:
+
+Unauthorised Data Access: Attackers might exploit misconfigured access controls to gain unauthorised access to sensitive data stored in DynamoDB tables.
+
+Data Exfiltration: Once inside, attackers can exfiltrate valuable data or manipulate records in the database, causing data breaches or integrity issues.
+
+Table Enumeration: Attackers may attempt to enumerate existing DynamoDB tables to gather information about the database structure and potential targets.
+
+Injection Attacks: If input validation is weak, attackers can attempt injection attacks, such as NoSQL injection, to exploit vulnerabilities and execute malicious queries.
+
+To safeguard against these threats, AWS users should implement strong access controls, use AWS Identity and Access Management (IAM) policies, regularly audit and monitor DynamoDB access, and apply encryption and best practices to secure their data and database configurations.
+
+```
+aws dynamodb list-tables # list tables
+aws dynamodb scan --table-name <table-name> # select * from tables
+```
+
+### Upload Malicious Image into ECR
+
+**Amazon Elastic Container Registry (ECR)**
+
+Amazon Elastic Container Registry (ECR) is a fully managed Docker container registry service provided by Amazon Web Services (AWS). It allows users to store, manage, and deploy container images, making it easier to build, store, and deploy containerized applications using popular tools like Docker.
+
+Here’s how AWS ECR works:
+
+Image Repository: Users can create repositories in ECR to store Docker images. Each repository can hold multiple image versions, making it a centralised hub for container images.
+
+Image Push and Pull: Developers can push (upload) their Docker images to ECR, while deployment environments can pull (download) the images for running containerized applications.
+
+Integration with ECS and EKS: ECR seamlessly integrates with Amazon Elastic Container Service (ECS) and Amazon Elastic Kubernetes Service (EKS), simplifying container deployment and orchestration.
+
+However, if attackers gain unauthorised access to an ECR repository, they could potentially abuse it:
+
+Image Manipulation: Attackers could modify container images, injecting malware, vulnerabilities, or malicious code into images used for deployments.
+
+Data Exfiltration: If the repository contains sensitive data, attackers might exfiltrate it or gain unauthorised access to confidential information.
+
+To secure ECR, AWS users should implement robust access controls, restrict permissions to trusted entities, and regularly audit and monitor repository activity to detect and prevent unauthorised access or abuse.
+
+The Importance of Docker Image Tags in Containerized Environments
+
+Docker image tags are crucial for several reasons in containerized environments:
+
+Versioning and Tracking: Image tags allow you to version your container images. Each tag represents a specific version of the image, making it easy to track changes, updates, and rollbacks. This versioning helps maintain consistency in deployments and facilitates debugging and troubleshooting.
+
+Reproducibility: Tags ensure that you can reliably recreate previous states of your application by specifying the exact image version. This is essential for consistent and predictable deployments, especially in continuous integration and continuous deployment (CI/CD) pipelines.
+
+Rolling Updates: When deploying applications at scale, having distinct image versions with different tags is critical. It allows you to perform rolling updates, where you gradually update instances to the latest image while maintaining older versions for redundancy and fallback.
+
+Testing and Development: Tags are invaluable during the development and testing phases. Developers can work with specific image versions, ensuring that they test against the same environment that will be deployed in production.
+
+Security and Patching: Image tags enable you to quickly identify and update vulnerable or outdated images. By maintaining a clear tagging strategy, you can swiftly address security issues by rolling out patched versions.
+
+```
+aws ecr describe-repositories # list repositories
+aws ecr describe-images --repository-name <repository-name> # list images from a repository
+
+
+# Login to AWS ECR (rights permissions needed)
+aws ecr get-login-password --region us-east-1 | sudo docker login --username AWS --password-stdin <registry-id>.dkr.ecr.us-east-1.amazonaws.com
+# And then push the image
+sudo docker push <registry-id>.dkr.ecr.us-east-1.amazonaws.com/<repository-id>:latest
+
+```
+
+When an attacker successfully compromises a Kubernetes environment, their initial command often involves running “env” to inspect environment variables. This is a common first step because, unfortunately, some DevOps practices involve storing sensitive information like cleartext keys directly as environment variables instead of securely managing them in a secret manager.
+
+By running “env” command, attackers can quickly access these sensitive credentials, potentially gaining unauthorised access to critical systems, databases, or cloud resources. It highlights the critical importance of adhering to security best practices, such as using Kubernetes Secrets or a dedicated secret management service, to safeguard sensitive information and prevent potential breaches in Kubernetes environments.
+
+### AWS SSO Phishing Attack
+
+**AWS IAM Identity Center**
+
+AWS IAM Identity Center offers a secure solution for the central management of workforce identities, allowing you to establish or link user identities seamlessly across AWS accounts and applications. It serves as the recommended method for implementing workforce authentication and authorization within AWS, catering to organisations of diverse sizes and types. With IAM Identity Center, you gain the ability to efficiently create and oversee user identities within the AWS ecosystem. You can also integrate your existing identity sources, including but not limited to Microsoft Active Directory, Okta, Ping Identity, JumpCloud, Google Workspace, and Microsoft Entra ID (Entra ID).
+
+Some use-cases are:
+
+Enable multi-account access to your AWS accounts: IAM Identity Center simplifies multi-account access management by allowing your users to employ their directory credentials for seamless single sign-on access to various AWS accounts. Through their personalised web user portal, users can conveniently view and access their assigned roles across multiple AWS accounts from one centralised location. This streamlined authentication experience extends to AWS CLI, SDKs, and the AWS Console Mobile Application, ensuring a uniform and secure authentication process.
+
+Enable single sign-on access to your AWS Apps: IAM Identity Center offers integrated access to AWS applications such as Amazon SageMaker Studio, AWS Systems Manager Change Manager, and AWS IoT SiteWise, enabling zero-configuration authentication and authorization. These applications seamlessly interact with IAM Identity Center to provide a unified view of users and groups, enhancing resource sharing and collaboration within the application environment. This integration ensures an efficient and consistent user experience for accessing AWS applications.
+
+From the previous lab, we gathered valuable information from EKS by executing the ‘env’ command. The value of ‘AWS_SSO’ is of utmost importance as it allows us to determine the URL of the AWS IAM Identity Center. By default, access to the AWS portal can be obtained via a URL following this format: `d-xxxxxxxxxx.awsapps.com/start`
+
+It’s essential to note that, without this URL, the ability to send phishing emails is impeded. 
+
+Fortunately, since most organisations customise this Identity by replacing it with their company name, we have the option to either brute force it or guess it.
+AWS SSO – Device Code Phishing Attack
+
+An AWS SSO device code phishing attack is a specific type of cyberattack targeting the device code flow used in the AWS Single Sign-On (SSO) authentication process. AWS SSO allows users to sign in once and access multiple AWS accounts and applications. The device code flow is a method used for authentication on devices with limited input capabilities, such as smart TVs or gaming consoles.
+
+In this attack, an attacker tries to trick a user into entering their device code on a malicious website or app controlled by the attacker. Once the attacker obtains the device code, they can use it to complete the authentication process and gain unauthorised access to the user’s AWS resources.
+
+
+- AWS SSO OIDC - IAM Identity Center OpenID Connect (OIDC) is a web service that enables a client (such as CLI or a native application) to register with IAM Identity Center
+
+### Enumerate AWS IAM Permission & Retrieve Secrets from Secret Manager
+
+**AWS Secrets Manager**
+
+AWS Secrets Manager is a service offered by Amazon Web Services that helps users securely manage, store, and retrieve secrets. Secrets can include passwords, API keys, tokens, and other sensitive data that applications, services, or IT resources need to access. The primary goal of AWS Secrets Manager is to safeguard access to services and applications by eliminating the need to hard-code sensitive information in plaintext, thereby enhancing security and compliance.
+
+Key features of AWS Secrets Manager include:
+
+- Secret Rotation: It supports the automatic rotation of secrets without requiring updates to your applications, thus ensuring credentials are regularly updated for enhanced security.
+- Centralized Management: It provides a centralized place to manage all your secrets, making it easier to organize, access, control them across your AWS environment.
+- Secure Storage: Secrets are encrypted using encryption keys that you control through AWS Key Management Service (KMS).
+- Access Control: Integration with AWS Identity and Access Management (IAM) allows you to control who can manage or access ysecrets.
+- Audit and Monitoring: Integration with AWS CloudTrail provides a record of calls to AWS Secrets Manager for compliance and auditpurposes.
+- Cross-Region Replication: It allows you to replicate secrets across multiple AWS regions for disaster recovery purposes.
+
+AWS Secrets Manager is designed to be highly available and durable, storing your secrets across multiple Availability Zones. It is particularly useful for managing credentials necessary for accessing databases, third-party APIs, and other services securely, without embedding them directly in code.
+
+To query AWS Secrets Manager and retrieve a secret, you can use the AWS Management Console, AWS CLI (Command Line Interface), AWS SDKs (Software Development Kits) for various programming languages, or directly via the AWS Secrets Manager REST API. Below are examples of how to retrieve a secret using the AWS CLI and AWS SDK for Python (Boto3).
