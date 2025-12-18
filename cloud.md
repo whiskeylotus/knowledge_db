@@ -10,6 +10,7 @@
 - [Pacu - AWS exploitation framework](https://github.com/RhinoSecurityLabs/pacu)
 - [dsnap - download EBS snapshots](https://github.com/RhinoSecurityLabs/dsnap)
 - [AWS sso device code authentication](https://github.com/christophetd/aws-sso-device-code-authentication)
+- [Enumerate IAM](https://github.com/andresriancho/enumerate-iam)
 
 
 ## AWS
@@ -28,6 +29,7 @@
 - ECS - Elastic Container Service
 - EKS - Elastic Kubernetes Service
 - KMS - Key Management Service
+- RDS - Relational Database Service
 
 ### Tips
 
@@ -72,7 +74,7 @@ aws s3 ls s3://insert-bucket-name-example
 [Cloud_enum](https://github.com/initstring/cloud_enum)
 
 ```
-./cloud_enum.py -k twocapital --disable-azure --disable-gcp
+./cloud_enum.py -k <company-name> --disable-azure --disable-gcp
 ```
 
 [BucketFinder](https://digi.ninja/projects/bucket_finder.php)
@@ -86,6 +88,9 @@ aws s3 sync s3://bucket . --no-sign-request # No sign-in required
 
 aws s3api list-object-versions --bucket bucket --no-sign-request # List bucket versions
 ```
+
+Check AWS s3 dumper in that case !
+
 
 **AWS Subdomain Takeover**
 
@@ -120,7 +125,8 @@ aws iam get-user --user-name <breached_username> # Return information about the 
 aws iam list-user-policies –user-name <breached_username> # Return a list of policies
 aws iam list-attached-user-policies --user-name <breached_username> # Return in-line policies
 aws iam get-user-policy --user-name <breached_username> --policy-name <policyname> # Return specific in-line policy
-
+aws iam list-users # list users in IAM
+aws iam create-access-key --user-name <user-name> # Create access key for the specified user
 ```
 
 [Pacu - AWS exploitation framework](https://github.com/RhinoSecurityLabs/pacu)
@@ -253,6 +259,10 @@ Always aim for the principle of least privilege when crafting policies. This mea
 
 #### Abusing Instance Metadata Service (IMDS)
 
+- Metadata exposes static information about the EC2 instance itself, such as instance ID, IAM role name, security groups, network interfaces, and region. This data describes what the instance is and how it’s configured.
+- Dynamic data provides information that can change over time, mainly related to the instance’s temporary state, such as spot instance actions or scheduled maintenance events.
+- User data is arbitrary data supplied by the instance creator at launch time and is commonly used for bootstrap scripts, configuration files, or—critically—hardcoded secrets, API keys, or credentials in poorly designed setups.
+
 If IMDSv1 is enabled, it is possible to retrieve metadata 
 
 ```
@@ -262,6 +272,8 @@ curl http://169.254.169.254/latest/meta-data/ami-id # instance's AMI ID
 curl http://169.254.169.254/latest/meta-data/instance-type # instance's type
 curl http://169.254.169.254/latest/meta-data/security-groups # instance security groups
 curl http://169.254.169.254/latest/meta-data/iam/security-credentials/<role-name> # instance's IAM role creds (if a role is attached to the instance)
+
+curl http://169.254.169.254/latest/user-data
 ```
 
 The IP address 169.254.169.254 is a special link-local address used by AWS for EC2 instances to access their metadata without requiring external connectivity.
@@ -300,7 +312,7 @@ Data Exfiltration: If an attacker has publishing access to a sensitive topic, th
 To prevent such abuse, it’s crucial to implement strict access controls, use AWS Identity and Access Management (IAM) policies, and regularly audit and monitor your SNS topics to detect and mitigate any unauthorised activity.
 
 ```
-aws --profile alex sns subscribe --topic-arn <topic-arn> --protocol email --notification-endpoint <email> # Subscribe to a topic
+aws sns subscribe --topic-arn <topic-arn> --protocol email --notification-endpoint <email> # Subscribe to a topic
 # Subscription needs to be validated by checking your mail
 ```
 
@@ -434,8 +446,28 @@ An AWS SSO device code phishing attack is a specific type of cyberattack targeti
 
 In this attack, an attacker tries to trick a user into entering their device code on a malicious website or app controlled by the attacker. Once the attacker obtains the device code, they can use it to complete the authentication process and gain unauthorised access to the user’s AWS resources.
 
-
 - AWS SSO OIDC - IAM Identity Center OpenID Connect (OIDC) is a web service that enables a client (such as CLI or a native application) to register with IAM Identity Center
+
+[Generate link for phishing attack](https://github.com/christophetd/aws-sso-device-code-authentication)
+
+```
+# Generate device-code link for phishing
+python3 main.py -u https://<AWS_SSO>.awsapps.com/start/ -r <region>
+
+
+```
+
+### Enumerate AWS IAM Identity Center Permissions
+
+Enumerate AWS SSO Portal
+
+```
+# Enumerate SSO 
+aws sso-admin list-instances # list instances
+aws sso-admin list-permission-sets --instance <instance-arn> # list permission sets
+aws sso-admin describe-permission-set --instance <instance-arn> --permission-set-arn <permission-set-arn> # describe a permission set
+```
+
 
 ### Enumerate AWS IAM Permission & Retrieve Secrets from Secret Manager
 
@@ -455,3 +487,118 @@ Key features of AWS Secrets Manager include:
 AWS Secrets Manager is designed to be highly available and durable, storing your secrets across multiple Availability Zones. It is particularly useful for managing credentials necessary for accessing databases, third-party APIs, and other services securely, without embedding them directly in code.
 
 To query AWS Secrets Manager and retrieve a secret, you can use the AWS Management Console, AWS CLI (Command Line Interface), AWS SDKs (Software Development Kits) for various programming languages, or directly via the AWS Secrets Manager REST API. Below are examples of how to retrieve a secret using the AWS CLI and AWS SDK for Python (Boto3).
+
+
+```
+aws secretsmanager list-secrets # list secrets
+aws secretsmanager get-secret-value --secret-id <secret-id> # get secret value
+aws secretsmanager get-secret-value --secret-id <secret-id> --version-id <version-id> # get secret value
+```
+
+### Utilising Rancher to Gain Shell Access to a Pod
+
+**What is Rancher and What are the Benefits of Using It**
+
+Rancher is a powerful and popular open-source container management platform that simplifies the deployment, orchestration, and management of containerized applications and Kubernetes clusters. It provides a comprehensive suite of tools and features that streamline the containerization journey for organisations, making it easier to harness the full potential of container technology. 
+
+Some key aspects and benefits of using Rancher:
+
+Centralised Management: Rancher offers a unified, web-based interface that allows users to manage and monitor multiple Kubernetes clusters across different environments from a single, centralised dashboard. This simplifies the management of complex container infrastructures, whether they are on-premises, in the cloud, or at the edge.
+
+Kubernetes Made Accessible: Rancher abstracts much of the complexity of Kubernetes, making it accessible to a wider range of users, from DevOps teams to developers. It provides an intuitive user experience for cluster provisioning, scaling, and lifecycle management, reducing the learning curve associated with Kubernetes.
+
+Multi-Cluster Management: Organisations often operate multiple Kubernetes clusters for various purposes, such as development, testing, and production. Rancher excels at managing multiple clusters, making it easy to ensure consistency, security, and compliance across these clusters. It simplifies the process of creating, upgrading, and patching clusters.
+
+Extensibility: Rancher’s open architecture allows users to easily integrate additional tools and services. It supports a wide range of third-party plugins and extensions, making it adaptable to various infrastructure and application requirements. This extensibility enhances Rancher’s capabilities, such as networking, storage, and security.
+
+Security and Compliance: Rancher offers robust security features, including role-based access control (RBAC), identity and access management (IAM), and security scanning for container images. These capabilities help organisations enforce security policies and ensure compliance with industry standards and regulations.
+
+### Amazon Elastic Kubernetes Service (AWS EKS)
+
+Amazon Elastic Kubernetes Service (AWS EKS) is a managed Kubernetes service provided by Amazon Web Services (AWS) that simplifies the deployment, management, and scaling of containerized applications using Kubernetes. Here’s an overview of AWS EKS, its components, and common misconfigurations that attackers may exploit:
+
+**AWS EKS Overview**
+
+AWS EKS abstracts the complexities of Kubernetes cluster management and offers a reliable and scalable platform for running containerized workloads. Key components include:
+
+EKS Cluster: The EKS cluster is the central management entity that hosts multiple worker nodes and manages their orchestration. It’s responsible for maintaining the desired state of your Kubernetes applications.
+
+Worker Nodes: Worker nodes are EC2 instances within your EKS cluster that run containerized applications. These nodes are managed by the EKS control plane.
+
+Pods: Pods are the smallest deployable units in Kubernetes, representing a single instance of a running process. Containers within a pod share the same network namespace, making them suitable for tightly coupled applications.
+
+Service: Kubernetes services provide a stable endpoint for accessing a set of pods. Services allow for load balancing and automatic DNS resolution, making applications accessible within the cluster or externally.
+
+Namespace: Namespace is a logical, virtual cluster within a physical Kubernetes cluster. Namespaces provide a way to segregate and isolate resources and objects within a cluster, creating distinct scopes for applications and services.
+
+**Kubernetes Common Misconfigurations**
+
+Some common misconfigurations in Kubernetes in general that can be exploited by attackers, along with the corresponding technical attack vectors:
+
+Inadequate Pod Security Policies (PSPs):
+
+Attack Vector: Attackers may exploit pods running with overly permissive security contexts to perform privilege escalation or container breakout attacks. For example, they may run containers with hostPath volumes to access sensitive host files.
+
+Exposed ConfigMaps:
+
+Attack Vector: Misconfigured ConfigMaps with sensitive data can expose credentials or configuration details. Attackers may exploit this to access secrets, manipulate application settings, or gain unauthorised access.
+
+Insecure Network Policies:
+
+Attack Vector: Weak or misconfigured Network Policies can allow attackers to move laterally within the cluster or exfiltrate data between pods. They may exploit this to perform reconnaissance or exfiltrate sensitive information.
+
+Unprotected etcd:
+
+Attack Vector: Inadequate protection of the etcd database, which stores Kubernetes configuration data, can lead to unauthorized access or data manipulation. Attackers may attempt to exploit etcd vulnerabilities to gain control over the cluster.
+
+Exposed kubelet API:
+
+Attack Vector: Misconfigured kubelet settings or exposed kubelet API endpoints can allow attackers to gain control over worker nodes. They may use this access to run rogue containers, compromise the node, or perform denial-of-service attacks.
+
+Insecure Secrets Management:
+
+Attack Vector: Storing secrets in plaintext or misconfigured Kubernetes Secrets can expose sensitive data. Attackers may exploit this to access credentials or API keys, leading to data breaches or unauthorised access.
+
+Open Service Endpoints:
+
+Attack Vector: Exposing services to the public internet without proper authentication can allow attackers to abuse these services or initiate Distributed Denial of Service (DDoS) attacks.
+
+Weak Authentication and Authorization:
+
+Attack Vector: Failing to enforce strong authentication and authorization mechanisms can lead to brute force attacks or unauthorised access. Attackers may attempt to guess or crack weak credentials to gain control over the cluster.
+
+Unpatched Software Components:
+
+Attack Vector: Neglecting to apply security patches and updates to Kubernetes, EKS, or worker nodes can leave known vulnerabilities unaddressed. Attackers may exploit these vulnerabilities to compromise the cluster.
+
+### Relational Database Service (AWS RDS)
+
+Amazon Web Services Relational Database Service (AWS RDS) is a managed database service that simplifies the setup, operation, and scaling of relational databases in the cloud. RDS supports various database engines, including MySQL, PostgreSQL, Oracle, SQL Server, and MariaDB, offering organisations a range of options to meet their specific database needs.
+
+Here’s how AWS RDS works:
+
+Deployment: Users can easily launch a relational database instance in RDS. AWS manages the provisioning of hardware, database setup, patching, and backups, reducing administrative overhead.
+
+Database Engines: RDS supports multiple database engines, allowing users to choose the one that best suits their application requirements.
+
+Scaling: RDS provides options for vertical and horizontal scaling to accommodate growing workloads. Users can resize instances or create read replicas for improved performance and availability.
+
+Automated Backups: RDS automated database backups, making it simple to recover data in case of failures or user errors. Users can also set up automated snapshots for data retention.
+
+Security: RDS offers robust security features, including network isolation, encryption at rest and in transit, and integration with AWS Identity and Access Management (IAM) for fine-grained access control.
+
+Monitoring and Metrics: AWS CloudWatch integration allows users to monitor database performance and set up alarms for proactive issue resolution.
+
+High Availability: RDS supports Multi-AZ deployments for failover and read replicas for improved availability and fault tolerance.
+
+AWS RDS simplifies database management, ensuring that organisations can focus on their applications while AWS takes care of the database infrastructure, backups, and maintenance. It’s a valuable service for those looking to run relational databases in the cloud with ease and reliability.
+
+A potential attacker can find publicly exposed Amazon RDS (Relational Database Service) instances through various means, and once they locate them, there are significant cybersecurity risks associated with these exposed instances:
+
+1. Port Scanning: Attackers often use port scanning tools to scan IP addresses for open ports associated with databases like MySQL, PostgreSQL, or Oracle. When they find an open port (typically port 3306 for MySQL), they may attempt to connect and probe for vulnerabilities.
+
+2. Shodan and Other Search Engines: Shodan is a specialised search engine that scans the internet for open ports and services. Attackers can use Shodan and similar search engines to find publicly exposed RDS instances by searching for specific keywords or services.
+
+3. DNS Enumeration: If the DNS name of the RDS instance is known or can be guessed, attackers can directly connect to it using the DNS name.
+
+4. Misconfigured Security Groups: In some cases, RDS instances may be exposed due to misconfigured security groups or network access control lists (NACLs) that allow unauthorised access from the internet.
